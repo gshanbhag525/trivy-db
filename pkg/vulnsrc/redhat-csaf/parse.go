@@ -308,7 +308,16 @@ func (p *Parser) parseVulnerability(adv CSAFAdvisory, vuln *csaf.Vulnerability) 
 				// Store the advisory release date for this RHSA ID
 				if _, exists := p.releaseDates[vulnID]; !exists {
 					if adv.Document != nil && adv.Document.Tracking != nil && adv.Document.Tracking.InitialReleaseDate != nil {
-						p.releaseDates[vulnID] = p.formatDate(*adv.Document.Tracking.InitialReleaseDate)
+						releaseDate := p.formatDate(*adv.Document.Tracking.InitialReleaseDate)
+						p.releaseDates[vulnID] = releaseDate
+						log.Debug("Captured release date for RHSA",
+							log.String("rhsa_id", string(vulnID)),
+							log.String("cve_id", string(cveID)),
+							log.String("release_date", releaseDate))
+					} else {
+						log.Debug("No release date available for RHSA",
+							log.String("rhsa_id", string(vulnID)),
+							log.String("cve_id", string(cveID)))
 					}
 				}
 			} else {

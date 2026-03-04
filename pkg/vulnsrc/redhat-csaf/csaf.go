@@ -3,6 +3,7 @@ package redhatcsaf
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/samber/oops"
 	bolt "go.etcd.io/bbolt"
@@ -135,15 +136,43 @@ func (vs VulnSrc) update(tx *bolt.Tx, dir string) error {
 			return eb.Wrapf(err, "failed to aggregate entries")
 		}
 
+		// Skip if no valid entries after aggregation (e.g., all CVEs were empty)
+		if len(entries) == 0 {
+			log.Debug("Skipping advisory with no valid entries after aggregation",
+				log.String("vuln_id", string(bkt.VulnerabilityID)),
+				log.String("package", bkt.Name))
+			bar.Increment()
+			continue
+		}
+
+		// Log the number of CVEs for debugging
+		totalCVEs := 0
+		for _, e := range entries {
+			totalCVEs += len(e.CVEs)
+		}
+		log.Debug("Storing CSAF advisory",
+			log.String("vuln_id", string(bkt.VulnerabilityID)),
+			log.String("package", bkt.Name),
+			log.Int("entries", len(entries)),
+			log.Int("total_cves", totalCVEs))
+
 		// Create an advisory containing these entries
 		advisory := Advisory{Entries: entries}
+
+		// Get the release date for this vulnerability
+		releaseDate := vs.parser.ReleaseDate(bkt.VulnerabilityID)
+		if releaseDate == "" && strings.HasPrefix(string(bkt.VulnerabilityID), "RHSA-") {
+			log.Warn("Missing release date for RHSA advisory",
+				log.String("rhsa_id", string(bkt.VulnerabilityID)),
+				log.String("package", bkt.Name))
+		}
 
 		// Store the advisory in the DB (default or custom put)
 		input := &PutInput{
 			Bucket:      bkt,
 			Advisory:    advisory,
 			CPEList:     cpeList,
-			ReleaseDate: vs.parser.ReleaseDate(bkt.VulnerabilityID),
+			ReleaseDate: releaseDate,
 		}
 		if err := vs.put(vs.dbc, tx, input); err != nil {
 			return eb.Wrapf(err, "failed to put advisory")

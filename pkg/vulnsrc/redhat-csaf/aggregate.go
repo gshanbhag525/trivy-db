@@ -62,18 +62,34 @@ func (a *Aggregator) aggregateCVEs(entries RawEntries) (Entries, error) {
 		eb := oops.With("fixed_version", key.FixedVersion).With("status", key.Status.String()).
 			With("arch", key.Arch).With("cpe", key.CPE)
 
-		// Create CVE entries
-		cves := lo.Map(group, func(e RawEntry, _ int) CVEEntry {
+		// Create CVE entries, filtering out any with empty IDs
+		cves := lo.FilterMap(group, func(e RawEntry, _ int) (CVEEntry, bool) {
+			if e.Alias == "" {
+				log.Warn("Skipping entry with empty CVE alias",
+					log.String("fixed_version", key.FixedVersion),
+					log.String("arch", key.Arch),
+					log.String("cpe", string(key.CPE)))
+				return CVEEntry{}, false
+			}
 			return CVEEntry{
 				ID:       string(e.Alias),
 				Severity: e.Severity,
-			}
+			}, true
 		})
 
 		// Sort CVEs for consistency
 		slices.SortFunc(cves, func(a, b CVEEntry) int {
 			return strings.Compare(a.ID, b.ID)
 		})
+
+		// Skip entries with no valid CVEs (all CVE aliases were empty)
+		if len(cves) == 0 {
+			log.Warn("Skipping entry with no valid CVEs",
+				log.String("fixed_version", key.FixedVersion),
+				log.String("arch", key.Arch),
+				log.String("cpe", string(key.CPE)))
+			continue
+		}
 
 		// CVEs should not be duplicated
 		if duplicated := lo.FindDuplicatesBy(cves, func(cve CVEEntry) string { return cve.ID }); len(duplicated) != 0 {
