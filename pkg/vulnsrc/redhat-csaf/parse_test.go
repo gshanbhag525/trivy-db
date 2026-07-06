@@ -214,3 +214,15 @@ func TestParser_DetectStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestParser_Description(t *testing.T) {
+	parser := NewParser()
+	require.NoError(t, parser.Parse(filepath.Join("testdata", "happy")))
+
+	assert.Equal(t,
+		"A vulnerability was found in PAM. The secret information is stored in memory, where the attacker can trigger the victim program to execute.",
+		parser.Description("RHSA-2024:9941"),
+	)
+	assert.Equal(t, "Test vulnerability description", parser.Description("RHSA-2024:9999"))
+	assert.Empty(t, parser.Description("CVE-NONEXISTENT"))
+}

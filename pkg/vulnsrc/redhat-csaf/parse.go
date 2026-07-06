@@ -35,6 +35,8 @@ type Parser struct {
 	// releaseDates holds the vendor_fix remediation timestamp per RHSA ID.
 	// CVE-only (unpatched) entries are not stored here.
 	releaseDates map[VulnerabilityID]time.Time
+	// descriptions holds vulnerability description from notes[category=description].
+	descriptions map[VulnerabilityID]string
 }
 
 func NewParser() Parser {
@@ -51,6 +53,7 @@ func NewParser() Parser {
 		advisories:   map[Package]map[VulnerabilityID]RawEntries{},
 		cpeSet:       set.NewOrdered[string](),
 		releaseDates: map[VulnerabilityID]time.Time{},
+		descriptions: map[VulnerabilityID]string{},
 	}
 }
 
@@ -208,6 +211,7 @@ func (p *Parser) parseVulnerability(adv CSAFAdvisory, vuln *csaf.Vulnerability) 
 	if cveID == "" {
 		return oops.Errorf("empty CVE ID")
 	}
+	desc := parseDescriptionNotes(vuln.Notes)
 	eb := oops.With("cve_id", cveID)
 
 	// Process remediations
@@ -325,6 +329,12 @@ func (p *Parser) parseVulnerability(adv CSAFAdvisory, vuln *csaf.Vulnerability) 
 				}
 			} else {
 				vulnID = cveID
+			}
+
+			if desc != "" {
+				if _, exists := p.descriptions[vulnID]; !exists {
+					p.descriptions[vulnID] = desc
+				}
 			}
 
 			fixedVersion := product.Package.Version
@@ -456,6 +466,23 @@ func (p *Parser) NVRToCPE() iter.Seq2[string, []string] {
 // or the zero value when no timestamp was recorded for it.
 func (p *Parser) ReleaseDate(vulnID VulnerabilityID) time.Time {
 	return p.releaseDates[vulnID]
+}
+
+// Description returns the vulnerability description from CSAF notes[category=description].
+func (p *Parser) Description(vulnID VulnerabilityID) string {
+	return p.descriptions[vulnID]
+}
+
+func parseDescriptionNotes(notes csaf.Notes) string {
+	for _, note := range notes {
+		if note == nil {
+			continue
+		}
+		if lo.FromPtr(note.NoteCategory) == csaf.CSAFNoteCategoryDescription {
+			return strings.TrimSpace(lo.FromPtr(note.Text))
+		}
+	}
+	return ""
 }
 
 // parseRemediationDateTime parses CSAF remediation date strings (expected RFC3339).

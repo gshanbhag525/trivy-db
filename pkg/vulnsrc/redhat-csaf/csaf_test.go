@@ -336,6 +336,19 @@ func TestVulnSrc_Update_WithCustomStore(t *testing.T) {
 			// Unpatched rows use the CVE as bucket ID; there is no RHSA remediation date.
 			assert.True(t, input.ReleaseDate.IsZero(), "ReleaseDate for %q", vid)
 		}
+
+		switch vid {
+		case "RHSA-2024:9941":
+			assert.Equal(t, "A vulnerability was found in PAM. The secret information is stored in memory, where the attacker can trigger the victim program to execute.", input.Description)
+		case "RHSA-2024:9999":
+			assert.Equal(t, "Test vulnerability description", input.Description)
+		case "RHSA-2025:0001":
+			assert.Equal(t, "Test vulnerability for new rpmmod qualifier format", input.Description)
+		case "CVE-2024-11111", "CVE-2024-22222":
+			assert.Equal(t, "Test vulnerability description", input.Description)
+		default:
+			assert.Empty(t, input.Description, "Description for %q", vid)
+		}
 	}
 
 	// Verify repo/NVR mappings were NOT written (custom store skips them)
