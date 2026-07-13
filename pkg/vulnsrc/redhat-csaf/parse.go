@@ -340,6 +340,7 @@ func (p *Parser) parseRemediation(
 		}
 
 		if desc != "" {
+			// One RHSA can fix multiple CVEs; keep the description from the first CVE document processed.
 			if _, exists := p.descriptions[vulnID]; !exists {
 				p.descriptions[vulnID] = desc
 			}
